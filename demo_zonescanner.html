@@ -78,7 +78,7 @@
           outputEl: document.getElementById("ocrOutput"),
           zoom: 2
         };
-        var zonescanner = new Zonescanner(options);
+        window.zonescanner = new Zonescanner(options);
         document.getElementById("help").onclick = function (){
           var e = document.createEvent("MouseEvents");
           e.initEvent('click', true, true);

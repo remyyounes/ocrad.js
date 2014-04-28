@@ -12,6 +12,8 @@
     this.contextOriginal = this.canvasOriginal.getContext('2d');
     this.outputEl = params.outputEl;
     this.currentImg = null,
+    this.currentPdf = null;
+    this.pageIndex = 1;
 
     this.zoomRatio = 1,
     this.zoom = params.zoom;
@@ -65,40 +67,11 @@
         self.selectionCoordinates.width = mousePos.x - self.selectionCoordinates.x;
         self.selectionCoordinates.height = mousePos.y - self.selectionCoordinates.y;
 
-        if(self.currentImg){
-          //we need to get it from the original canvas with new coordinates
-          var scale = (1/self.zoomRatio) * self.zoom,
-            image_data = self.contextOriginal.getImageData(
-            self.selectionCoordinates.x * scale,
-            self.selectionCoordinates.y * scale,
-            self.selectionCoordinates.width * scale,
-            self.selectionCoordinates.height * scale
-          );
-
-          var newCanvas = document.createElement("CANVAS");
-          newCanvas.setAttribute("width", image_data.width);
-          newCanvas.setAttribute("height", image_data.height)
-          newCanvas.getContext("2d").putImageData(image_data, 0, 0);
-
-          // resize canvas to accomodate for new size
-          self.canvasSecondary.width = image_data.width * scale;
-          self.canvasSecondary.height = image_data.height * scale;
-
-          self.contextSecondary.fillRect(0, 0, self.canvasSecondary.width, self.canvasSecondary.height)
-          self.contextSecondary.save();
-          self.contextSecondary.scale(scale, scale);
-          self.contextSecondary.drawImage(newCanvas, 0, 0);
-          self.contextSecondary.restore();
-
-          self.runOCR(image_data);
-        }
+        self.displayOCRZone();
       };
       self.canvasPrimary.onmousemove = function(e){
         e.preventDefault()
-        if(!self.currentImg) {
-          debugger;
-          return;
-        }
+        if(!self.currentImg) return;
         if(self.drag){
           var mousePos = getMousePosition(self.canvasPrimary, e);
           self.selectionCoordinates.width = mousePos.x - self.selectionCoordinates.x;
@@ -109,7 +82,36 @@
         }
       };
     },
-    pageToCanvas: function (ratio, canvas, page) {
+    displayOCRZone: function () {
+      if(this.currentImg){
+        //we need to get it from the original canvas with new coordinates
+        var scale = (1/this.zoomRatio) * this.zoom,
+          image_data = this.contextOriginal.getImageData(
+          this.selectionCoordinates.x * scale,
+          this.selectionCoordinates.y * scale,
+          this.selectionCoordinates.width * scale,
+          this.selectionCoordinates.height * scale
+        );
+
+        var newCanvas = document.createElement("CANVAS");
+        newCanvas.setAttribute("width", image_data.width);
+        newCanvas.setAttribute("height", image_data.height)
+        newCanvas.getContext("2d").putImageData(image_data, 0, 0);
+
+        // resize canvas to accomodate for new size
+        this.canvasSecondary.width = image_data.width * scale;
+        this.canvasSecondary.height = image_data.height * scale;
+
+        this.contextSecondary.fillRect(0, 0, this.canvasSecondary.width, this.canvasSecondary.height)
+        this.contextSecondary.save();
+        this.contextSecondary.scale(scale, scale);
+        this.contextSecondary.drawImage(newCanvas, 0, 0);
+        this.contextSecondary.restore();
+
+        this.runOCR(image_data);
+      }
+    },
+    pageToCanvas: function (ratio, canvas, page, callback) {
       var self = this;
       reset_canvas(canvas);
       var viewport = page.getViewport(ratio),
@@ -128,10 +130,20 @@
           reset_canvas(canvas);
           ctx.drawImage( image, 0, 0 );
           // TODO >> ??
-          debugger;
           self.currentImg = image;
+
+          if(callback) callback();
         }
       );
+    },
+    loadPage: function (pageIndex, callback) {
+      var self = this;
+      self.currentPdf.getPage(pageIndex).then(function getPdfPage(page) {
+        self.pageToCanvas( self.zoom, self.canvasOriginal, page, callback );
+        self.zoomRatio = self.canvasWidth / page.getViewport(1).width;
+        self.pageToCanvas( self.zoomRatio, self.canvasPrimary, page );
+        debugger;
+      });
     },
     loadFile: function (file){
       var self = this;
@@ -145,13 +157,9 @@
       if(ext == 'pdf'){
         reader.onload = function(){
           PDFJS.getDocument(reader.result).then(function getPdf(pdf) {
-
-            pdf.getPage(1).then(function getPdfPage(page) {
-              self.pageToCanvas( self.zoom, self.canvasOriginal, page );
-              self.zoomRatio = self.canvasWidth / page.getViewport(1).width;
-              self.pageToCanvas( self.zoomRatio, self.canvasPrimary, page );
-            });
-
+            self.currentPdf = pdf;
+            self.pageIndex = 1;
+            self.loadPage(self.pageIndex);
           });
         }
         reader.readAsArrayBuffer(file);
@@ -197,6 +205,10 @@
     },
     ocrResultHandler: function( data ) {
       this.outputEl.innerHTML = data.result + "<div class='time'>" + "processed in " + data.time + " s" + "</div>";
+    },
+    nextPage: function(){
+      this.pageIndex++;
+      this.loadPage( this.pageIndex, this.displayOCRZone.bind(this) );
     }
   };
 
