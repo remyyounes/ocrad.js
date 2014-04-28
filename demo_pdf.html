@@ -1,0 +1,380 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Ocrad.js - Optical Character Recognition in Javascript</title>
+    <script  src="http://localhost/javascript/pdf.js/build/pdf.js"></script>
+    <script src="http://localhost/javascript/ocrad.js/ocrad.js"></script>
+    <meta charset="utf8">
+    <style>
+      body {
+        font-family: sans-serif;
+        background: #DCE9E9;
+      }
+      body.dragging {
+        background-color: #F0E6DC;
+      }
+      #main {
+        margin-right: auto;
+        margin-left: auto;
+        padding: 10px;
+        width: 600px;
+      }
+      h1 {
+        font-size: 400%;
+        margin-top: 30px;
+      }
+
+      #ocrZone { background: white; }
+      #tempCanvas { display:none; background: white; }
+      .output {
+        background: rgb(255, 245, 211);
+      }
+      #output {
+        padding: 20px;
+        padding-bottom: 0;
+        text-align: center;
+        min-height: 80px;
+        -moz-transition: background-color 0.5s;
+        -webkit-transition: background-color 0.5s;
+        -o-transition: background-color 0.5s;
+        transition: background-color 0.5s;
+      }
+      .processing {
+        background-color: rgb(211, 232, 255);
+      }
+      a {
+        text-decoration: none;
+        font-weight: bold;
+      }
+      h3 {
+        text-align: center;
+        font-style: italic;
+      }
+
+      .buttons {
+        position: absolute;
+        margin-left: -60px;
+        margin-top: -250px;
+      }
+      #demo {
+        box-shadow: 0px 0px 35px rgba(0,0,0,0.2);
+        margin-bottom: 50px;
+        background: white;
+      }
+      #timing {
+        font-size: x-small;
+      }
+      hr {
+        border: none;
+      }
+      .buttons #clear { color: red; font-size: 400%; font-weight: bold; cursor: pointer;}
+      .buttons #word { color: blue; font-size: 300%; font-weight: bold; cursor: pointer; margin-left: -2px;}
+      .nose {
+        -moz-transition: background-color 0.5s;
+        -webkit-transition: background-color 0.5s;
+        -o-transition: background-color 0.5s;
+        transition: background-color 0.5s;
+      }
+      .nose:hover {
+        background-color: rgb(255, 222, 211);
+      }
+    </style>
+  </head>
+  <body>
+    <a href="https://github.com/antimatter15/ocrad.js"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://s3.amazonaws.com/github/ribbons/forkme_right_red_aa0000.png" alt="Fork me on GitHub"></a>
+    <div id="main">
+      <input type="file" style="position:absolute; top: -100px" id="picker" onchange="picked_file(this.files[0])">
+
+      <h1>Ocrad.js&nbsp;<div style="font-size: small; font-weight: normal; display: inline">Optical Character Recognition in JS</div></h1>
+
+      <div id="demo">
+        <div class="output">
+
+          <div id="output">
+            <div id="text"></div>
+            <span id="timing"></span>
+          </div>
+        </div>
+        <canvas id='c' class="" width="600" height="300"></canvas>
+        <div class="buttons">
+        </div>
+        <div class="output nose" style="padding: 25px; cursor: pointer" onclick="open_picker()">
+          You can also <strong>drag and drop</strong> an image from your computer <small>(JPEG, PNG, GIF, BMP, SVG, or NetPBM)</small> to feed into the text recognizer or <strong>choose a file</strong> by clicking anywhere on this box.
+
+        </div>
+
+      </div>
+      <div class="ocrViewer">
+        <canvas id='ocrZone' class="" width="200" height="100"></canvas>
+      </div>
+
+    </div>
+    <canvas id='tempCanvas' class="" width="200" height="100"></canvas>
+    <script src="http://ajax.googleapis.com/ajax/libs/webfont/1/webfont.js"></script>
+
+    <script>
+
+      var selectionBoxPrimary = null,
+        currentPage,
+        currentImage,
+        canvasWidth = 600,
+        canvasPrimary = document.getElementById('c'),
+        canvasSecondary = document.getElementById('ocrZone'),
+        canvasOriginal = document.getElementById("tempCanvas"),
+        contextPrimary = canvasPrimary.getContext('2d'),
+        contextSecondary = canvasSecondary.getContext('2d'),
+        contextOriginal = canvasOriginal.getContext('2d'),
+        currentImg = null,
+        orignalImg = null,
+        pageScale = 1,
+        zoom = 2,
+        drag = false,
+        selectionCoordinates = {};
+
+      function reset_canvas(canvas){
+        if(!canvas) canvas = canvasPrimary;
+        var ctx = canvas.getContext('2d');
+        ctx.fillStyle = 'white'
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+        ctx.fillStyle = 'black'
+      };
+
+      function getMousePosition(canvas, evt) {
+        var rect = canvas.getBoundingClientRect();
+        return {
+          x: evt.clientX - rect.left,
+          y: evt.clientY - rect.top
+        };
+      }
+
+      var drawSelectionBox = function(context) {
+        context.strokeRect(
+          selectionCoordinates.x,
+          selectionCoordinates.y,
+          selectionCoordinates.width,
+          selectionCoordinates.height
+        );
+      }
+
+      // here's a really simple little drawing app so people can try their luck at
+      // the lottery that is offline handwriting recognition
+      canvasPrimary.onmousedown = function(e){
+        drag = true;
+        var mousePos = getMousePosition(canvasPrimary, e);
+        selectionCoordinates.x = mousePos.x;
+        selectionCoordinates.y = mousePos.y;
+        e.preventDefault();
+        canvasPrimary.onmousemove(e);
+      };
+      canvasPrimary.onmouseup = function(e){
+        var mousePos = getMousePosition(canvasPrimary, e);
+        selectionCoordinates.width = mousePos.x - selectionCoordinates.x;
+        selectionCoordinates.height = mousePos.y - selectionCoordinates.y;
+
+        drag = false;
+        e.preventDefault();
+
+        if(currentImg){
+          //we need to get it from the original canvas with new coordinates
+          var scale = pageScale * zoom,
+            image_data = contextOriginal.getImageData(
+            selectionCoordinates.x * scale,
+            selectionCoordinates.y * scale,
+            selectionCoordinates.width * scale,
+            selectionCoordinates.height * scale
+          );
+
+          var newCanvas = document.createElement("CANVAS");
+          newCanvas.setAttribute("width", image_data.width);
+          newCanvas.setAttribute("height", image_data.height)
+          newCanvas.getContext("2d").putImageData(image_data, 0, 0);
+
+          // resize canvas to accomodate for new size
+          canvasSecondary.width = image_data.width * scale;
+          canvasSecondary.height = image_data.height * scale;
+
+          contextSecondary.fillRect(0, 0, canvasSecondary.width, canvasSecondary.height)
+          contextSecondary.save();
+          contextSecondary.scale(scale, scale);
+          contextSecondary.drawImage(newCanvas, 0, 0);
+          contextSecondary.restore();
+
+          runOCR(image_data, true)
+        }
+      };
+
+      canvasPrimary.onmousemove = function(e){
+        e.preventDefault()
+
+        if(drag){
+          var mousePos = getMousePosition(canvasPrimary, e);
+          selectionCoordinates.width = mousePos.x - selectionCoordinates.x;
+          selectionCoordinates.height = mousePos.y - selectionCoordinates.y;
+
+          reset_canvas();
+          if(currentImg) contextPrimary.drawImage( currentImg, 0, 0 );
+          drawSelectionBox(contextPrimary);
+        }
+      };
+
+      canvasOriginal.onmousemove = function(e){
+        e.preventDefault();
+
+        // reset_canvas(canvasOriginal);
+        // if(orignalImg) contextOriginal.drawImage( orignalImg, 0, 0 );
+        // console.log("!");
+      }
+
+
+      document.body.ondragover = function(){ document.body.className = 'dragging'; return false }
+      document.body.ondragend = function(){ document.body.className = ''; return false }
+      document.body.onclick = function(){document.body.className = '';}
+      document.body.ondrop = function(e){
+        e.preventDefault();
+        document.body.className = '';
+        picked_file(e.dataTransfer.files[0]);
+        return false;
+      }
+
+      function open_picker(){
+        var e = document.createEvent("MouseEvents");
+        e.initEvent('click', true, true);
+        document.getElementById('picker').dispatchEvent(e);
+      }
+
+      function picked_file(file){
+        if(!file) return;
+        // document.getElementById("output").className = 'processing'
+
+        var ext = file.name.split('.').slice(-1)[0];
+        var reader = new FileReader();
+
+        if(file.type == "image/x-portable-bitmap" || ext == 'pbm' || ext == 'pgm' || ext == 'pnm' || ext == 'ppm'){
+          reader.onload = function(){
+            reset_canvas();
+            document.getElementById("text").innerHTML = 'Recognizing Text... This may take a while...'
+            contextPrimary.font = '30px sans-serif'
+            contextPrimary.fillText('No previews for NetPBM format.', 50, 100);
+            runOCR(new Uint8Array(reader.result), true);
+          }
+          reader.readAsArrayBuffer(file)
+        }else if(ext == 'pdf'){
+          reader.onload = function(){
+            var pdfData = reader.result;
+
+            PDFJS.getDocument(pdfData).then(function getPdfHelloWorld(pdf) {
+              //
+              // Fetch the first page
+              //
+              pdf.getPage(1).then(function getPageHelloWorld(page) {
+
+                currentPage = page;
+                reset_canvas(canvasOriginal);
+                var viewport = page.getViewport(zoom);
+                canvasOriginal.height = viewport.height;
+                canvasOriginal.width = viewport.width;
+                console.log( "viewport.width1", viewport.width );
+
+                page.render({canvasContext: contextOriginal, viewport: viewport}).then(
+                  function(e){
+                    var image = new Image();
+                    image.src = canvasOriginal.toDataURL("image/png");
+                    orignalImg = image;
+
+                    //redraw on purpose: seems to fix canvas display issue (black areas)
+                    reset_canvas(canvasOriginal);
+                    contextOriginal.drawImage( orignalImg, 0, 0 );
+                  }
+                );
+                var rat = canvasWidth / page.getViewport(1).width;
+                pageScale = 1/rat;
+                viewport = page.getViewport(rat);
+
+                //
+                // Prepare canvas using PDF page dimensions
+                //
+                canvasPrimary.height = viewport.height;
+                canvasPrimary.width = viewport.width;
+
+                console.log( "viewport.width2", viewport.width );
+                console.log( "viewport.width.orig", page.getViewport(1).width );
+                console.log( "rat", rat );
+                console.log( "pageScale", pageScale );
+                //
+                // Render PDF page into canvasPrimary context
+                //
+                page.render({canvasContext: contextPrimary, viewport: viewport}).then(
+                  function(e){
+                    var image = new Image();
+                    image.src = canvasPrimary.toDataURL("image/png");
+                    currentImg = image;
+                    //redraw on purpose: seems to fix canvas display issue (black areas)
+                    reset_canvas(canvasPrimary);
+                    contextPrimary.drawImage( currentImg, 0, 0 );
+                  }
+                );
+
+              });
+            });
+          }
+          reader.readAsArrayBuffer(file);
+
+        }else{
+          reader.onload = function(){
+            var img = new Image();
+            img.src = reader.result;
+            img.onerror = function(){
+              reset_canvas();
+              contextPrimary.font = '30px sans-serif'
+              contextPrimary.fillText('Error: Invalid Image ' + file.name, 50, 100);
+            }
+            img.onload = function(){
+              document.getElementById("text").innerHTML = 'Recognizing Text... This may take a while...'
+              reset_canvas();
+              var rat = Math.min(canvasPrimary.width / img.width, canvasPrimary.height / img.height);
+              contextPrimary.drawImage(img, 0, 0, img.width * rat, img.height * rat)
+              var tmp = document.createElement('canvas')
+              tmp.width = img.width;
+              tmp.height = img.height;
+              var ctx = tmp.getContext('2d');
+              ctx.drawImage(img, 0, 0);
+              currentImg = img;
+              var image_data = ctx.getImageData(0, 0, tmp.width, tmp.height);
+              runOCR(image_data, true)
+            }
+          }
+          reader.readAsDataURL(file)
+        }
+      }
+
+      var lastWorker;
+      var worker = new Worker('http://localhost/javascript/ocrad.js/worker.js');
+      PDFJS.workerSrc = 'http://localhost/javascript/pdf.js/build/pdf.worker.js';
+
+      function runOCR(image_data, raw_feed){
+        document.getElementById("output").className = 'processing'
+        worker.onmessage = function(e){
+
+          document.getElementById("output").className = ''
+
+          if('innerText' in document.getElementById("text")){
+            document.getElementById("text").innerText = e.data
+          }else{
+            document.getElementById("text").textContent = e.data
+          }
+          document.getElementById('timing').innerHTML = 'recognition took ' + ((Date.now() - start)/1000).toFixed(2) + 's';
+        }
+        var start = Date.now()
+        if(!raw_feed){
+          image_data = contextPrimary.getImageData(0, 0, canvasPrimary.width, canvasPrimary.height);
+        }
+
+        worker.postMessage(image_data)
+        lastWorker = worker;
+      }
+
+      reset_canvas()
+
+    </script>
+  </body>
+</html>
