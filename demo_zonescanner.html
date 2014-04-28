@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Zonescanner - Optical Character Recognition with Ocrad.js and PDF.js</title>
+    <script  src="http://localhost/javascript/pdf.js/build/pdf.js"></script>
+    <script src="http://localhost/javascript/ocrad.js/ocrad.js"></script>
+    <script src="zonescanner.js"></script>
+    <meta charset="utf8">
+    <style>
+      body {
+        font-family: sans-serif;
+        background: #DCE9E9;
+      }
+
+      h1 { font-size: 300%; margin: 30px;}
+      h2 { font-size: 200%; margin: 20px; border-bottom: 2px solid; }
+      #demo {
+        box-shadow: 0px 0px 35px rgba(0,0,0,0.2);
+        margin: 30px 30px;
+      }
+      #side {
+        display: table-cell;
+        background: rgb(255, 245, 211);
+        width: 320px;
+        height: 100%;
+        vertical-align:top;
+      }
+      .time { font-size: 70%; color: darkgrey; margin-top: 10px; text-align: right; }
+      #content {
+        display: table-cell;
+        background:white;
+        width: 100%;
+      }
+      #canvasOriginal { display: none; }
+      #canvasSecondary { max-width: 300px; margin: 10px; border: 1px solid}
+      #ocrOutput { color: darkgreen; margin: 20px; min-height: 80px;}
+    </style>
+  </head>
+  <body>
+    <div id="main">
+      <input type="file" style="position:absolute; top: -100px" id="picker">
+
+      <h1>Drawings OCR Prototype&nbsp;<div style="font-size: small; font-weight: normal; display: inline">Zone defined OCR using OCRAD.js and PDF.js</div></h1>
+
+      <div id="demo">
+
+        <div id="side">
+          <div class="output">
+            <h2>OCR Output</h2>
+            <div id="ocrOutput"></div>
+          </div>
+          <div class="ocrZone">
+            <h2>OCR Zone</h2>
+            <canvas id="canvasSecondary"></canvas>
+          </div>
+          <div id="controls"></div>
+          <div id="results"></div>
+        </div>
+
+        <div id="content">
+          <canvas id="canvasPrimary"></canvas>
+        </div>
+
+      </div>
+      <div id="help" style="padding: 25px; cursor: pointer">
+        <strong>Drag and drop</strong> an image from your computer <small>(JPEG, PNG, GIF, BMP, SVG, or PDF)</small> to feed into the text recognizer or <strong>choose a file</strong> by clicking anywhere on this text.
+      </div>
+
+    </div>
+    <canvas id='canvasOriginal' class="" width="200" height="100"></canvas>
+    <script src="http://ajax.googleapis.com/ajax/libs/webfont/1/webfont.js"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", function(event) {
+        var options = {
+          canvasPrimary: document.getElementById("canvasPrimary"),
+          canvasSecondary: document.getElementById("canvasSecondary"),
+          canvasOriginal: document.getElementById("canvasOriginal"),
+          outputEl: document.getElementById("ocrOutput"),
+          zoom: 2
+        };
+        var zonescanner = new Zonescanner(options);
+        document.getElementById("help").onclick = function (){
+          var e = document.createEvent("MouseEvents");
+          e.initEvent('click', true, true);
+          document.getElementById('picker').dispatchEvent(e);
+        };
+        document.getElementById("picker").onchange = function(){
+          zonescanner.loadFile(this.files[0]);
+        };
+
+      });
+    </script>
+  </body>
+</html>
