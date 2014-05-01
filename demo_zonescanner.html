@@ -4,6 +4,8 @@
     <title>Zonescanner - Optical Character Recognition with Ocrad.js and PDF.js</title>
     <script  src="http://localhost/javascript/pdf.js/build/pdf.js"></script>
     <script src="http://localhost/javascript/ocrad.js/ocrad.js"></script>
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/2.1.0/jquery.min.js"></script>
+
     <script src="zonescanner.js"></script>
     <meta charset="utf8">
     <style>
@@ -12,8 +14,8 @@
         background: #DCE9E9;
       }
 
-      h1 { font-size: 300%; margin: 30px;}
-      h2 { font-size: 200%; margin: 20px; border-bottom: 2px solid; }
+      h1 { font-size: 300%; margin: 30px 0;}
+      h2 { font-size: 200%; margin: 20px 0; border-bottom: 2px solid; }
       #demo {
         box-shadow: 0px 0px 35px rgba(0,0,0,0.2);
         margin: 30px 30px;
@@ -21,9 +23,11 @@
       #side {
         display: table-cell;
         background: rgb(255, 245, 211);
-        width: 320px;
+        min-width: 320px;
+        max-width: 320px;
         height: 100%;
         vertical-align:top;
+        padding: 10px;
       }
       .time { font-size: 70%; color: darkgrey; margin-top: 10px; text-align: right; }
       #content {
@@ -31,9 +35,18 @@
         background:white;
         width: 100%;
       }
+
+      #controls a{
+        text-decoration: none;
+        padding: 2px 5px;
+        background: #DCE9E9;
+        color: darkgrey;
+
+      }
       #canvasOriginal { display: none; }
       #canvasSecondary { max-width: 300px; margin: 10px; border: 1px solid}
       #ocrOutput { color: darkgreen; margin: 20px; min-height: 80px;}
+      #content { overflow: hidden; }
     </style>
   </head>
   <body>
@@ -45,6 +58,11 @@
       <div id="demo">
 
         <div id="side">
+          <div id="controls">
+            <h2>PDF Controls</h2>
+            <a id="next" href="#">Next</a> /
+            <a id="previous" href="#">Previous</a>
+          </div>
           <div class="output">
             <h2>OCR Output</h2>
             <div id="ocrOutput"></div>
@@ -53,7 +71,6 @@
             <h2>OCR Zone</h2>
             <canvas id="canvasSecondary"></canvas>
           </div>
-          <div id="controls"></div>
           <div id="results"></div>
         </div>
 
@@ -86,6 +103,13 @@
         };
         document.getElementById("picker").onchange = function(){
           zonescanner.loadFile(this.files[0]);
+        };
+
+        document.getElementById("next").onclick = function(){
+          zonescanner.nextPage();
+        };
+        document.getElementById("previous").onclick = function(){
+          zonescanner.previousPage();
         };
 
       });

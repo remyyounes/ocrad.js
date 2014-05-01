@@ -21,6 +21,7 @@
     this.selectionCoordinates = {};
 
     this.canvasWidth = this.canvasPrimary.parentElement.offsetWidth;
+    this.canvasPrimary.parentElement.style["max-width"] = this.canvasWidth + "px";
 
     this.init();
   };
@@ -50,6 +51,7 @@
         return false;
       }
     },
+
     attachSelectionEvents: function(){
       var self = this;
       self.canvasPrimary.onmousedown = function(e){
@@ -158,6 +160,7 @@
         reader.onload = function(){
           PDFJS.getDocument(reader.result).then(function getPdf(pdf) {
             self.currentPdf = pdf;
+            self.numPages = pdf.numPages;
             self.pageIndex = 1;
             self.loadPage(self.pageIndex);
           });
@@ -207,8 +210,15 @@
       this.outputEl.innerHTML = data.result + "<div class='time'>" + "processed in " + data.time + " s" + "</div>";
     },
     nextPage: function(){
+      if(this.pageIndex <= this.numPages)
       this.pageIndex++;
       this.loadPage( this.pageIndex, this.displayOCRZone.bind(this) );
+    },
+    previousPage: function(){
+      if(this.pageIndex > 1){
+        this.pageIndex--;
+        this.loadPage( this.pageIndex, this.displayOCRZone.bind(this) );
+      }
     }
   };
 
